@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -43,6 +44,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE " + "LOWER(p.name) LIKE LOWER(CONCAT('%', :serachTerm, '%'))")
     Page<Product> searchByNameOrDescription(@Param("searchTerm") String searchTerm, Pageable pageable);
 
-    //Find product with low stock
-    @Query("SELECT p FRPM Product p WHERE p.stockQuantity <= :threshold AND")
+    //Custom query: Find product with low stock
+    @Query("SELECT p FROM Product p WHERE p.stockQuantity <= :threshold AND p.isActive = true")
+    List<Product> findLowStockProducts(@Param("threshold") Integer threshold);
+
+    //Custom query: Get all categories
+    @Query("SELECT DISTINCT p.category FROM Product p WHERE p.category IS NOT NULL ORDER BY p.category")
+    List<String> findAllCategories();
+
+    //Custom query: count products by category
+    Long countByCategoryAndIsActiveTrue(@Param("category") String category);
+
+    //Custom native query: Find products with stock quantity greater than specified value
+    @Query(value = "SELECT * FROM products WHERE stock_quantity >?1 AND is_active = true", nativeQuery = true)
+    List<Product> findProductsWithStockGreaterThan(Integer quantity);
 }
