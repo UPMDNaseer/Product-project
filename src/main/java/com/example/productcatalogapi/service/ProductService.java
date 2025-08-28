@@ -7,8 +7,13 @@ import com.example.productcatalogapi.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.jaxb.SpringDataJaxb;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -64,7 +69,115 @@ public class ProductService {
     public ProductResponseDTO updateProduct(Long id, ProductRequestDTO requestDTO){
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(()-> new ProductNotFoundException("Product not found with id: " + id));
-        return convertToResponseDTO(product);
 
+        //Check if code is being changed and if new code already exists
+        if(!existingProduct.getCode().equals(requestDTO.getCode()) &&
+                productRepository.existsByCode(requestDTO.getCode())){
+                throw  new DuplicateProductException("Product with code '" +
+                        requestDTO.getCode() +"' already exists");
+        }
+
+        updateProductFromDTO(existingProduct, requestDTO);
+        Product updateProduct = productRepository.save(existingProduct);
+        return convertToResponseDTO(updateProduct);
+    }
+
+
+    //Delete product
+    public void deleteProduct(Long id){
+        Product product = productRepository.findById(id)
+                .orElseThrow(()-> new ProductNotFoundException("Product not found with id: " + id));
+        productRepository.delete(product);
+    }
+
+
+    //Search product by name or description
+    @Transactional(readOnly = true)
+    public Page<ProductResponseDTO> searchProducts(String searchTerm, Pageable pageable){
+        Page<Product> productPage = productRepository.searchByNameOrDescription(searchTerm, pageable);
+        return productPage.map(this::convertToResponseDTO);
+    }
+
+    //Get products by category
+    @Transactional(readOnly = true)
+    public Page<ProductResponseDTO> getProductsByCategory(String category, Pageable pageable){
+        productRepository.findByCategoryIgnoreCase(category, pageable);
+        return productPage.map(this::convertToResponseDTO);
+    }
+
+
+    //Get products by price range
+    @Transactional(readOnly = true)
+    public  Page<ProductResponseDTO> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable){
+        Page<Product> productPage = productRepository.findByPriceBetween(minPrice, maxPrice, pageable);
+        return productPage.map(this::convertToResponseDTO);
+    }
+
+
+    //Get active products
+    @Transactional(readOnly = true)
+    public  Page<ProductResponseDTO> getActiveProducts(Pageable pageable){
+        Page<Product> productPage = productRepository.findByIsActiveTrue(pageable);
+        return productPage.map(this::convertToResponseDTO);
+    }
+
+
+    //Get all categories
+    @Transactional(readOnly = true)
+    public List<String> getAllCategories(){
+        return productRepository.findAllCategories();
+    }
+
+
+    //Get low stock products
+    @Transactional(readOnly = true)
+    public List<ProductResponseDTO> getLowStockProducts(Integer threshold){
+        List<Product> products = productRepository.findLowStockProducts(threshold);
+        return products.stream()
+                .map(this::convertToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+
+    //Helper method to convert ProductResponseDTO to Product entity
+    private Product convertToEntity(ProductResponseDTO requestDTO){
+        Product product = new Product();
+        product.setCode(requestDTO.getCode());
+        product.setName(requestDTO.getName());
+        product.setDescription(requestDTO.getDescription());
+        product.setPrice(requestDTO.getPrice());
+        product.setCategory(requestDTO.getCategory());
+        product.setStockQuantity(requestDTO.getStockQuantity());
+        product.setIsActive(requestDTO.getIsActive());
+        return product;
+    }
+
+
+    //Helper method to convert Product entity to ProductResponseDTO
+    private ProductResponseDTO convertToResponseDTO(Product product) {
+        return new ProductResponseDTO(
+                product.getId(),
+                product.getCode(),
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getCategory(),
+                product.getStockQuantity(),
+                product.getIsActive(),
+                product.getCreatedAt(),
+                product.getUpdatedAt()
+        );
+    }
+
+
+    //Helper method to update existing product from ProductRequestDTO
+    private void updateProductFromDTO(Product product, ProductRequestDTO requestDTO) {
+        product.setCode(requestDTO.getCode());
+        product.setName(requestDTO.getName());
+        product.setDescription(requestDTO.getDescription());
+        product.setPrice(requestDTO.getPrice());
+        product.setCategory(requestDTO.getCategory());
+        product.setStockQuantity(requestDTO.getStockQuantity());
+        product.setIsActive(requestDTO.getIsActive());
     }
 }
